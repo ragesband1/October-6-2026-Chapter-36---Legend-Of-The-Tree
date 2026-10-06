@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chapter 36 - Legend Of The Tree</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome CDN for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            user-select: none;
+        }
+
+        .font-cinzel {
+            font-family: 'Cinzel', serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(74, 222, 128, 0.4);
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(74, 222, 128, 0.7);
+        }
+
+        /* Crosshair */
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* Floating Damage Text Animation */
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-40px) scale(1.2); }
+        }
+        .damage-text {
+            position: absolute;
+            animation: floatUp 1s ease-out forwards;
+            font-weight: 800;
+            text-shadow: 0px 2px 4px black;
+            pointer-events: none;
+            z-index: 20;
+        }
+    </style>
+</head>
+<body class="relative w-full h-screen overflow-hidden">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- FPS Crosshair -->
+    <div class="crosshair w-4 h-4 border-2 border-emerald-400/80 rounded-full flex items-center justify-center">
+        <div class="w-1 h-1 bg-emerald-300 rounded-full"></div>
+    </div>
+
+    <!-- UI Overlay Top Left (Player Stats HUD) -->
+    <div class="absolute top-4 left-4 z-10 flex flex-col gap-3 max-w-xs w-full pointer-events-auto">
+        <div class="glass-panel p-4 rounded-xl flex items-center gap-4">
+            <div class="relative w-14 h-14 rounded-full bg-emerald-950 border-2 border-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-900/50">
+                <i class="fa-solid fa-hat-wizard text-emerald-400 text-2xl"></i>
+                <span id="player-level" class="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 font-extrabold text-xs px-2 py-0.5 rounded-full border border-amber-300">Lv.1</span>
+            </div>
+            <div class="flex-1 flex flex-col gap-1.5">
+                <div class="flex justify-between items-center">
+                    <span class="font-cinzel text-sm font-bold text-amber-200">Wizard Zayapath</span>
+                    <span class="text-xs text-slate-400" id="hp-text">100/100</span>
+                </div>
+                <!-- HP Bar -->
+                <div class="w-full h-3 bg-slate-900/80 rounded-full overflow-hidden border border-slate-700/50">
+                    <div id="hp-bar" class="h-full bg-gradient-to-r from-red-600 to-emerald-500 w-full transition-all duration-300"></div>
+                </div>
+                <!-- Mana Bar -->
+                <div class="w-full h-2.5 bg-slate-900/80 rounded-full overflow-hidden border border-slate-700/50">
+                    <div id="mp-bar" class="h-full bg-gradient-to-r from-cyan-600 to-blue-400 w-full transition-all duration-300"></div>
+                </div>
+                <!-- XP Bar -->
+                <div class="w-full h-1.5 bg-slate-900/80 rounded-full overflow-hidden">
+                    <div id="xp-bar" class="h-full bg-amber-400 w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quest Objective Tracker -->
+        <div class="glass-panel p-3.5 rounded-xl flex flex-col gap-1.5">
+            <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-amber-400 border-b border-slate-700/60 pb-1">
+                <span><i class="fa-solid fa-scroll mr-1.5"></i> Active Quest</span>
+                <span id="quest-status" class="text-emerald-400">In Progress</span>
+            </div>
+            <p id="quest-title" class="text-sm font-semibold text-slate-100">Chapter 36: Defend the Legend Of The Tree</p>
+            <p id="quest-desc" class="text-xs text-slate-300 leading-relaxed">Turn greedy chainsaw woodcutters into trees to stop environmental abuse!</p>
+            <div id="quest-progress" class="text-xs font-bold text-amber-300 mt-1">
+                - Woodcutters Defeated: <span id="killed-count">0</span>/5
+            </div>
+        </div>
+    </div>
+
+    <!-- UI Overlay Top Right (Mini-Map & Controls Quick Bar) -->
+    <div class="absolute top-4 right-4 z-10 flex flex-col items-end gap-3 pointer-events-auto">
+        <!-- Minimap Container -->
+        <div class="glass-panel p-2 rounded-2xl border-2 border-emerald-500/40 relative">
+            <canvas id="minimap" width="140" height="140" class="rounded-xl bg-slate-950/90"></canvas>
+            <span class="absolute top-3 left-3 text-[10px] font-bold bg-slate-900/80 px-1.5 py-0.5 rounded text-emerald-400">MINIMAP</span>
+        </div>
+
+        <!-- Quick Control Buttons -->
+        <div class="flex gap-2">
+            <button id="btn-camera" title="Toggle View Camera (V)" class="glass-panel hover:bg-slate-800 text-amber-300 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-camera"></i> <span id="cam-mode-text">3rd Person</span>
+            </button>
+            <button id="btn-story" title="Read Story (R)" class="glass-panel hover:bg-slate-800 text-amber-300 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-book-open"></i> Story
+            </button>
+            <button id="btn-skills" title="Skill Tree (K)" class="glass-panel hover:bg-slate-800 text-amber-300 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Skills
+            </button>
+            <button id="btn-inventory" title="Inventory (I)" class="glass-panel hover:bg-slate-800 text-amber-300 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-bag-shopping"></i> Items
+            </button>
+        </div>
+    </div>
+
+    <!-- Bottom Controls & Action Bar -->
+    <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-auto">
+        <div class="glass-panel p-3 rounded-2xl flex items-center gap-3">
+            <div class="flex items-center gap-2">
+                <!-- Skill 1 -->
+                <div class="relative group bg-slate-900/90 border border-emerald-500/50 p-2.5 rounded-xl flex flex-col items-center cursor-pointer hover:border-emerald-400 transition" id="skill-slot-1">
+                    <i class="fa-solid fa-bolt text-emerald-400 text-xl"></i>
+                    <span class="text-[10px] text-slate-400 font-bold mt-1">L-Click</span>
+                    <span class="absolute -top-2 -right-2 bg-slate-800 text-slate-200 text-[10px] px-1.5 rounded-full border border-slate-600">Basic</span>
+                </div>
+                <!-- Skill 2 -->
+                <div class="relative group bg-slate-900/90 border border-blue-500/50 p-2.5 rounded-xl flex flex-col items-center cursor-pointer hover:border-blue-400 transition" id="skill-slot-2">
+                    <i class="fa-solid fa-tree text-cyan-400 text-xl"></i>
+                    <span class="text-[10px] text-slate-400 font-bold mt-1">R-Click</span>
+                    <span class="absolute -top-2 -right-2 bg-blue-900 text-cyan-200 text-[10px] px-1.5 rounded-full border border-blue-500">Punish</span>
+                </div>
+            </div>
+
+            <div class="h-8 w-px bg-slate-700/60"></div>
+
+            <!-- Controls Quick Reference -->
+            <div class="text-xs text-slate-300 flex items-center gap-4 px-2">
+                <span class="flex items-center gap-1"><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-amber-300">WASD</kbd> Move</span>
+                <span class="flex items-center gap-1"><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-amber-300">Space</kbd> Jump</span>
+                <span class="flex items-center gap-1"><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-amber-300">Click</kbd> Attack</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Alert Message Banner -->
+    <div id="toast-message" class="absolute top-20 left-1/2 -translate-x-1/2 z-30 pointer-events-none opacity-0 transition-opacity duration-500 glass-panel border border-amber-500/50 text-amber-200 px-6 py-2.5 rounded-xl shadow-2xl font-bold text-sm text-center">
+        Notification Message
+    </div>
+
+    <!-- Modal Container: Full Story Reader -->
+    <div id="modal-story" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 hidden pointer-events-auto">
+        <div class="glass-panel max-w-2xl w-full max-h-[85vh] rounded-2xl p-6 flex flex-col border border-amber-500/40 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-4">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-book-bookmark text-amber-400 text-2xl"></i>
+                    <div>
+                        <h2 class="font-cinzel text-xl font-bold text-amber-300">Chapter 36: Bedtime Stories</h2>
+                        <p class="text-xs text-slate-400">April 1, 2020 • Legend Of The Tree</p>
+                    </div>
+                </div>
+                <button onclick="toggleModal('modal-story')" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="overflow-y-auto custom-scrollbar text-slate-200 text-sm leading-relaxed space-y-4 pr-2">
+                <div class="p-3 bg-amber-950/30 border border-amber-500/20 rounded-xl italic text-amber-200/90 text-center">
+                    "From the creations of Garden Of Eden And 'The Rages Band'"
+                </div>
+
+                <p>Once upon a time in a far far home, There lived a <strong>“Tree Of Life”</strong> where in case of this scenario. The wizard name <strong>Zayapath</strong> living there is respecting to take care the Mother Nature. As long as to keep a survival on Earth.</p>
+                
+                <p>Suddenly came there is the wood cutters whom known the human and with the chainsaw. Wants to cut down the forests or likewise a trees. Wizard Zayapath didn’t know about the trees cut down. Because he is fell asleep in just 3 months ago of becoming hibernated person with lack of eating food.</p>
+
+                <p>The human wood cutters still cut down trees as never ending and what they do. Is just turning the cutting trees into papers. Like they want to draw, write and even putting the news all about. And because of so much abuse done by the human wood cutters with a chainsaw. After 3 months earlier in morning Wizard Zayath get awake and wanted to see the nature of trees around. Definitely it was already no more trees because it’s too late.</p>
+
+                <p class="border-l-2 border-emerald-500 pl-3 italic text-emerald-300">
+                    Wizard Zayapath said to himself: "How can it be, why this is happened. I’m sure this is what the people who’ve been abuse in cutting over and over trees all around without quitting their own part of job."
+                </p>
+
+                <p>Wizard Zayapath wanted to figure it out who is the people cutting the trees. Then for his own intuition he wanted to punish the people on what is the reason why they cut down trees. After the next 2 months of finding. Wizard Zayapath peeped down the bushes below. Then he saw the human wood cutters who wanted to cut the last tree. Which is the home of Wizard Zayapath. He called it that time <strong>“Legend Of The Tree”</strong>.</p>
+
+                <p>Human saw the last tree and said: <em>"Oh hmm… I think that is so nice to see. Even we need money to accumulate more, we must be greedy to cut down trees all along."</em></p>
+
+                <p>Wizard Zayapath already appeared on their front of the last “Legend Of The Tree”. Wizard Zayapath said: <em>"Hey you! All of you why you are cutting down the trees! Don’t you know if you cut down the trees. You didn't care our healthy nature therefore when it is raining and due to the cause of bad weather with a storm and heavy rainfalls. All of the homes you live will been flooded. As the punishment I wanted to turn you into the 'Legend Of The Tree'. As the punishment both of you will turn into a single tree!"</em></p>
+
+                <p>The human wood cutters with a chainsaw was so scared and said: <em>"Excuse me we we’re not afraid what you tell us... We want some gold and money. That’s why we cut down trees."</em></p>
+
+                <p>Wizard Zayapath turned them into the <strong>"Legend Of The Tree"</strong>, where all human wood cutters transformed into a single magical tree. His home became 2 tree homes now...</p>
+
+                <div class="mt-4 p-4 bg-emerald-950/50 border border-emerald-500/40 rounded-xl">
+                    <h4 class="font-cinzel text-amber-300 font-bold mb-1"><i class="fa-solid fa-leaf text-emerald-400 mr-2"></i>Moral Lesson</h4>
+                    <p class="text-xs text-slate-300 leading-normal">Don’t be greedy so much in cutting down trees. Respect to cut few trees to avoid a most pollutions of landslide and waterways. Take care the environment because trees can help dissolve the erosions of biggest waters to avoid flash floods. Don’t abuse cut trees because of money. Be humble with less money to have less cut down trees only for emergency and responsibilities.</p>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-700 flex justify-end">
+                <button onclick="toggleModal('modal-story')" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-5 py-2 rounded-xl transition text-sm">
+                    Close Book
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Container: Skill Tree -->
+    <div id="modal-skills" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 hidden pointer-events-auto">
+        <div class="glass-panel max-w-xl w-full rounded-2xl p-6 border border-emerald-500/40 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-4">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-wand-magic-sparkles text-emerald-400 text-2xl"></i>
+                    <div>
+                        <h2 class="font-cinzel text-xl font-bold text-amber-300">Wizard Skill Tree</h2>
+                        <p class="text-xs text-slate-400">Available Skill Points: <span id="skill-points-display" class="text-amber-400 font-bold">0</span></p>
+                    </div>
+                </div>
+                <button onclick="toggleModal('modal-skills')" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-2">
+                <!-- Skill 1 -->
+                <div class="glass-panel p-4 rounded-xl border border-slate-700 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold text-emerald-300 text-sm">Nature Beam Power</span>
+                            <span id="skill-lvl-1" class="text-xs bg-slate-800 text-amber-300 px-2 py-0.5 rounded">Lv. 1</span>
+                        </div>
+                        <p class="text-xs text-slate-300">Increases base magic beam spell damage by +15.</p>
+                    </div>
+                    <button id="btn-upgrade-1" onclick="upgradeSkill(1)" class="mt-4 w-full bg-slate-800 hover:bg-emerald-600 hover:text-slate-950 text-slate-200 text-xs font-bold py-2 rounded-lg transition border border-slate-600">
+                        Upgrade (1 Point)
+                    </button>
+                </div>
+
+                <!-- Skill 2 -->
+                <div class="glass-panel p-4 rounded-xl border border-slate-700 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold text-cyan-300 text-sm">Mana Flow</span>
+                            <span id="skill-lvl-2" class="text-xs bg-slate-800 text-amber-300 px-2 py-0.5 rounded">Lv. 1</span>
+                        </div>
+                        <p class="text-xs text-slate-300">Increases mana regeneration speed and maximum Mana pool.</p>
+                    </div>
+                    <button id="btn-upgrade-2" onclick="upgradeSkill(2)" class="mt-4 w-full bg-slate-800 hover:bg-cyan-600 hover:text-slate-950 text-slate-200 text-xs font-bold py-2 rounded-lg transition border border-slate-600">
+                        Upgrade (1 Point)
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-700 flex justify-end">
+                <button onclick="toggleModal('modal-skills')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 rounded-xl text-xs transition">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Container: Inventory -->
+    <div id="modal-inventory" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 hidden pointer-events-auto">
+        <div class="glass-panel max-w-lg w-full rounded-2xl p-6 border border-amber-500/40 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-4">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-bag-shopping text-amber-400 text-2xl"></i>
+                    <div>
+                        <h2 class="font-cinzel text-xl font-bold text-amber-300">Inventory & Equipment</h2>
+                        <p class="text-xs text-slate-400">Gold/Coins Collected: <span id="gold-display" class="text-amber-300 font-bold">0</span> Gold</p>
+                    </div>
+                </div>
+                <button onclick="toggleModal('modal-inventory')" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="grid grid-cols-4 gap-3 my-4">
+                <!-- Potions / Items -->
+                <div onclick="useItem('hp')" class="glass-panel p-3 rounded-xl border border-red-500/30 hover:border-red-400 flex flex-col items-center justify-center cursor-pointer group">
+                    <i class="fa-solid fa-flask text-red-400 text-2xl group-hover:scale-110 transition"></i>
+                    <span class="text-xs font-bold text-slate-200 mt-1">HP Potion</span>
+                    <span id="hp-potion-count" class="text-[10px] text-amber-300">x 3</span>
+                </div>
+
+                <div onclick="useItem('mp')" class="glass-panel p-3 rounded-xl border border-cyan-500/30 hover:border-cyan-400 flex flex-col items-center justify-center cursor-pointer group">
+                    <i class="fa-solid fa-vial text-cyan-400 text-2xl group-hover:scale-110 transition"></i>
+                    <span class="text-xs font-bold text-slate-200 mt-1">Mana Potion</span>
+                    <span id="mp-potion-count" class="text-[10px] text-amber-300">x 2</span>
+                </div>
+
+                <div class="glass-panel p-3 rounded-xl border border-amber-500/30 flex flex-col items-center justify-center">
+                    <i class="fa-solid fa-wand-sparkles text-amber-400 text-2xl"></i>
+                    <span class="text-xs font-bold text-slate-200 mt-1">Eden Wand</span>
+                    <span class="text-[10px] text-emerald-400">Equipped</span>
+                </div>
+
+                <div class="glass-panel p-3 rounded-xl border border-slate-800 flex flex-col items-center justify-center opacity-40">
+                    <i class="fa-solid fa-shield-halved text-slate-500 text-2xl"></i>
+                    <span class="text-xs font-bold text-slate-500 mt-1">Empty Slot</span>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-700 flex justify-end">
+                <button onclick="toggleModal('modal-inventory')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 rounded-xl text-xs transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Victory / Game Over Overlay Modal -->
+    <div id="modal-end" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 hidden pointer-events-auto">
+        <div class="glass-panel max-w-xl w-full rounded-2xl p-8 border-2 border-amber-400 shadow-2xl text-center flex flex-col items-center">
+            <div class="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center border-2 border-amber-400 mb-4 animate-bounce">
+                <i class="fa-solid fa-tree text-emerald-400 text-4xl"></i>
+            </div>
+            
+            <h2 id="end-title" class="font-cinzel text-3xl font-extrabold text-amber-300 mb-2">VICTORY OVER GREED!</h2>
+            <p id="end-subtitle" class="text-sm text-slate-300 mb-6">Wizard Zayapath successfully transformed the greedy woodcutters into the single sacred "Legend Of The Tree"!</p>
+
+            <div class="bg-slate-900/90 border border-emerald-500/40 p-4 rounded-xl text-left text-xs leading-relaxed text-slate-300 mb-6">
+                <h4 class="font-cinzel font-bold text-emerald-400 mb-1 text-sm"><i class="fa-solid fa-leaf mr-1"></i> Story Moral Lesson:</h4>
+                Don’t be greedy so much in cutting down trees. Respect to cut few trees to avoid a most pollutions of landslide and waterways. Take care the environment because trees can help dissolve the erosions of biggest waters to avoid flash floods.
+            </div>
+
+            <button onclick="restartGame()" class="bg-gradient-to-r from-emerald-500 to-amber-500 text-slate-950 font-extrabold text-base px-8 py-3 rounded-xl shadow-lg hover:brightness-110 transition transform active:scale-95">
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* GAME LOGIC & THREE.JS ENGINE INITIALIZATION */
+
+        // Game State Variables
+        let scene, camera, renderer;
+        let clock = new THREE.Clock();
+        
+        let player = {
+            mesh: null,
+            hp: 100,
+            maxHp: 100,
+            mp: 100,
+            maxMp: 100,
+            level: 1,
+            xp: 0,
+            maxXp: 100,
+            skillPoints: 0,
+            beamDamage: 30,
+            manaRegen: 10,
+            gold: 0,
+            hpPotions: 3,
+            mpPotions: 2,
+            position: new THREE.Vector3(0, 0, 0),
+            velocity: new THREE.Vector3(),
+            isGrounded: true,
+            speed: 12
+        };
+
+        let cameraMode = '3rd'; // '3rd' or '1st'
+        let keys = {};
+        let mouseX = 0, mouseY = 0;
+        let isPointerLocked = false;
+
+        let woodcutters = [];
+        let spellProjectiles = [];
+        let particles = [];
+        let legendaryTrees = [];
+        let quests = {
+            woodcuttersKilled: 0,
+            targetKills: 5,
+            bossSpawned: false,
+            bossDefeated: false
+        };
+
+        let minimapCanvas, minimapCtx;
+
+        // Initialize Scene & Engine
+        window.onload = function () {
+            initThreeJS();
+            createEnvironment();
+            createPlayer();
+            spawnWoodcutters(5);
+            setupControls();
+            setupMinimap();
+            
+            // Start main animation loop
+            animate();
+        };
+
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0e1726);
+            scene.fog = new THREE.FogExp2(0x0e1726, 0.015);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Lighting Setup
+            const ambientLight = new THREE.AmbientLight(0xdff0ff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfffaed, 1.2);
+            dirLight.position.set(40, 60, 20);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 150;
+            const d = 50;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            scene.add(dirLight);
+
+            // Window Resize Listener
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createEnvironment() {
+            // Ground Mesh
+            const groundGeo = new THREE.PlaneGeometry(200, 200, 32, 32);
+            const groundMat = new THREE.MeshStandardMaterial({ 
+                color: 0x1f3a22, 
+                roughness: 0.9,
+                metalness: 0.1
+            });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Grid / Path details
+            const gridHelper = new THREE.GridHelper(200, 40, 0x22c55e, 0x14532d);
+            gridHelper.position.y = 0.02;
+            scene.add(gridHelper);
+
+            // Wizard Zayapath's Home Tree ("Legend Of The Tree")
+            createLegendaryTree(0, 0, 0, true);
+
+            // Stumps & Remaining Trees scattering
+            for (let i = 0; i < 25; i++) {
+                let x = (Math.random() - 0.5) * 160;
+                let z = (Math.random() - 0.5) * 160;
+                if (Math.hypot(x, z) < 15) continue; // Keep center clear
+
+                if (Math.random() > 0.4) {
+                    createStump(x, z);
+                } else {
+                    createNormalTree(x, z);
+                }
+            }
+
+            // Weather Particles (Rain / Mystical Storm)
+            const particleGeo = new THREE.BufferGeometry();
+            const particleCount = 400;
+            const posArray = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                posArray[i] = (Math.random() - 0.5) * 180;
+                posArray[i + 1] = Math.random() * 40;
+                posArray[i + 2] = (Math.random() - 0.5) * 180;
+            }
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const particleMat = new THREE.PointsMaterial({
+                size: 0.25,
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.6
+            });
+            const particleSystem = new THREE.Points(particleGeo, particleMat);
+            particleSystem.name = "weatherParticles";
+            scene.add(particleSystem);
+        }
+
+        // Helper to Build Legendary Home Tree
+        function createLegendaryTree(x, z, scale = 1, isHome = false) {
+            const group = new THREE.Group();
+
+            // Trunk
+            const trunkGeo = new THREE.CylinderGeometry(1.2 * scale, 1.8 * scale, 8 * scale, 8);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a2e18, roughness: 0.9 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 4 * scale;
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            group.add(trunk);
+
+            // Foliage Layers
+            const foliageMat = new THREE.MeshStandardMaterial({ 
+                color: isHome ? 0x10b981 : 0x059669, 
+                roughness: 0.6,
+                emissive: isHome ? 0x064e3b : 0x000000 
+            });
+            
+            for (let i = 0; i < 3; i++) {
+                const foliageGeo = new THREE.ConeGeometry((4.5 - i * 0.8) * scale, (5 - i) * scale, 8);
+                const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+                foliage.position.y = (7 + i * 2.5) * scale;
+                foliage.castShadow = true;
+                group.add(foliage);
+            }
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+            
+            if (!isHome) {
+                legendaryTrees.push(group);
+            }
+        }
+
+        function createNormalTree(x, z) {
+            createLegendaryTree(x, z, 0.7 + Math.random() * 0.3, false);
+        }
+
+        function createStump(x, z) {
+            const group = new THREE.Group();
+            const stumpGeo = new THREE.CylinderGeometry(0.8, 1, 1.2, 8);
+            const stumpMat = new THREE.MeshStandardMaterial({ color: 0x3d2314, roughness: 1 });
+            const stump = new THREE.Mesh(stumpGeo, stumpMat);
+            stump.position.y = 0.6;
+            stump.castShadow = true;
+            group.add(stump);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+        }
+
+        function createPlayer() {
+            const group = new THREE.Group();
+
+            // Body / Robe
+            const bodyGeo = new THREE.CylinderGeometry(0.5, 0.8, 2.2, 8);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x047857 }); // Emerald Robe
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 1.1;
+            body.castShadow = true;
+            group.add(body);
+
+            // Head
+            const headGeo = new THREE.SphereGeometry(0.4, 16, 16);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xfde047 });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 2.4;
+            group.add(head);
+
+            // Wizard Hat
+            const hatGeo = new THREE.ConeGeometry(0.7, 1.2, 12);
+            const hatMat = new THREE.MeshStandardMaterial({ color: 0x065f46 });
+            const hat = new THREE.Mesh(hatGeo, hatMat);
+            hat.position.y = 3.2;
+            hat.rotation.z = -0.1;
+            group.add(hat);
+
+            // Magic Wand / Staff
+            const staffGeo = new THREE.CylinderGeometry(0.06, 0.06, 3, 8);
+            const staffMat = new THREE.MeshStandardMaterial({ color: 0x78350f });
+            const staff = new THREE.Mesh(staffGeo, staffMat);
+            staff.position.set(0.6, 1.5, -0.3);
+            staff.rotation.x = Math.PI / 6;
+
+            const orbGeo = new THREE.SphereGeometry(0.2, 12, 12);
+            const orbMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
+            const orb = new THREE.Mesh(orbGeo, orbMat);
+            orb.position.y = 1.6;
+            staff.add(orb);
+
+            group.add(staff);
+
+            group.position.set(player.position.x, player.position.y, player.position.z);
+            scene.add(group);
+            player.mesh = group;
+        }
+
+        function spawnWoodcutters(count) {
+            for (let i = 0; i < count; i++) {
+                spawnSingleWoodcutter(false);
+            }
+        }
+
+        function spawnSingleWoodcutter(isBoss = false) {
+            const group = new THREE.Group();
+
+            const size = isBoss ? 1.6 : 1.0;
+
+            // Woodcutter Body
+            const bodyGeo = new THREE.BoxGeometry(0.9 * size, 1.8 * size, 0.6 * size);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: isBoss ? 0xb91c1c : 0xd97706 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = (0.9) * size;
+            body.castShadow = true;
+            group.add(body);
+
+            // Head
+            const headGeo = new THREE.BoxGeometry(0.6 * size, 0.6 * size, 0.6 * size);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xfca5a5 });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = (2.1) * size;
+            group.add(head);
+
+            // Chainsaw Weapon
+            const sawBladeGeo = new THREE.BoxGeometry(0.2 * size, 0.3 * size, 1.6 * size);
+            const sawMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8 });
+            const saw = new THREE.Mesh(sawBladeGeo, sawMat);
+            saw.position.set(0.7 * size, 1.0 * size, 0.6 * size);
+            group.add(saw);
+
+            // Position randomly away from center
+            let angle = Math.random() * Math.PI * 2;
+            let radius = 25 + Math.random() * 45;
+            let x = Math.cos(angle) * radius;
+            let z = Math.sin(angle) * radius;
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+
+            woodcutters.push({
+                mesh: group,
+                hp: isBoss ? 350 : 80,
+                maxHp: isBoss ? 350 : 80,
+                isBoss: isBoss,
+                speed: isBoss ? 4.5 : 6,
+                attackPower: isBoss ? 25 : 10,
+                lastAttack: 0
+            });
+        }
+
+        function setupControls() {
+            // Pointerlock / Mouse look controls
+            document.getElementById('canvas-container').addEventListener('click', () => {
+                document.body.requestPointerLock();
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                isPointerLocked = (document.pointerLockElement === document.body);
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isPointerLocked) return;
+                player.mesh.rotation.y -= e.movementX * 0.003;
+            });
+
+            window.addEventListener('keydown', (e) => {
+                keys[e.code] = true;
+
+                if (e.code === 'KeyV') toggleCameraMode();
+                if (e.code === 'KeyR') toggleModal('modal-story');
+                if (e.code === 'KeyK') toggleModal('modal-skills');
+                if (e.code === 'KeyI') toggleModal('modal-inventory');
+                if (e.code === 'Space' && player.isGrounded) {
+                    player.velocity.y = 8;
+                    player.isGrounded = false;
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                keys[e.code] = false;
+            });
+
+            // Mouse Clicks for Spells
+            window.addEventListener('mousedown', (e) => {
+                if (!isPointerLocked) return;
+                if (e.button === 0) castSpell('beam'); // Left Click
+                if (e.button === 2) castSpell('punish'); // Right Click
+            });
+
+            // Prevent context menu on right click
+            window.addEventListener('contextmenu', e => e.preventDefault());
+
+            // Button Click Listeners
+            document.getElementById('btn-camera').onclick = toggleCameraMode;
+            document.getElementById('btn-story').onclick = () => toggleModal('modal-story');
+            document.getElementById('btn-skills').onclick = () => toggleModal('modal-skills');
+            document.getElementById('btn-inventory').onclick = () => toggleModal('modal-inventory');
+        }
+
+        function castSpell(type) {
+            if (type === 'beam') {
+                if (player.mp < 10) {
+                    showToast("Not enough Mana!");
+                    return;
+                }
+                player.mp -= 10;
+                updateHUD();
+
+                // Create Projectile
+                const projGeo = new THREE.SphereGeometry(0.4, 12, 12);
+                const projMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
+                const proj = new THREE.Mesh(projGeo, projMat);
+
+                const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(player.mesh.quaternion);
+                proj.position.copy(player.mesh.position).add(new THREE.Vector3(0, 1.8, 0));
+
+                scene.add(proj);
+                spellProjectiles.push({
+                    mesh: proj,
+                    dir: dir,
+                    speed: 35,
+                    damage: player.beamDamage,
+                    type: 'beam',
+                    life: 2.0
+                });
+            } else if (type === 'punish') {
+                if (player.mp < 35) {
+                    showToast("Need 35 Mana for Punishment Spell!");
+                    return;
+                }
+                player.mp -= 35;
+                updateHUD();
+
+                showToast("✨ Casted Legend Punishment Spell!");
+
+                // Turn closest woodcutter into Legend Tree
+                let closest = null;
+                let minDist = 15;
+
+                woodcutters.forEach(w => {
+                    let d = player.mesh.position.distanceTo(w.mesh.position);
+                    if (d < minDist) {
+                        minDist = d;
+                        closest = w;
+                    }
+                });
+
+                if (closest) {
+                    transformWoodcutterToTree(closest);
+                }
+            }
+        }
+
+        function transformWoodcutterToTree(woodcutter) {
+            const pos = woodcutter.mesh.position.clone();
+            scene.remove(woodcutter.mesh);
+
+            // Spawn legendary tree in its place
+            createLegendaryTree(pos.x, pos.z, woodcutter.isBoss ? 1.5 : 0.9, false);
+
+            showToast("✨ Greedy Woodcutter turned into 'Legend Of The Tree'!");
+            
+            // Gain Rewards
+            player.xp += woodcutter.isBoss ? 100 : 35;
+            player.gold += woodcutter.isBoss ? 50 : 15;
+            quests.woodcuttersKilled++;
+
+            if (player.xp >= player.maxXp) {
+                levelUp();
+            }
+
+            // Remove from active array
+            woodcutters = woodcutters.filter(w => w !== woodcutter);
+            checkQuestProgress();
+            updateHUD();
+        }
+
+        function checkQuestProgress() {
+            document.getElementById('killed-count').innerText = quests.woodcuttersKilled;
+
+            if (quests.woodcuttersKilled >= quests.targetKills && !quests.bossSpawned) {
+                quests.bossSpawned = true;
+                showToast("⚠️ Boss Woodcutter Has Arrived with a Heavy Chainsaw!");
+                document.getElementById('quest-title').innerText = "Chapter 36: Defeat the Greedy Boss Woodcutter!";
+                document.getElementById('quest-desc').innerText = "Turn the Greedy Boss Woodcutter into a Legend Tree to protect Mother Nature!";
+                spawnSingleWoodcutter(true); // Spawn Boss
+            }
+
+            if (quests.bossSpawned && woodcutters.filter(w => w.isBoss).length === 0 && !quests.bossDefeated) {
+                quests.bossDefeated = true;
+                showVictory();
+            }
+        }
+
+        function levelUp() {
+            player.level++;
+            player.xp -= player.maxXp;
+            player.maxXp = Math.floor(player.maxXp * 1.5);
+            player.maxHp += 20;
+            player.hp = player.maxHp;
+            player.maxMp += 15;
+            player.mp = player.maxMp;
+            player.skillPoints++;
+            showToast(`🎉 LEVEL UP! Reached Level ${player.level}`);
+            updateHUD();
+        }
+
+        function updateHUD() {
+            document.getElementById('hp-bar').style.width = `${(player.hp / player.maxHp) * 100}%`;
+            document.getElementById('mp-bar').style.width = `${(player.mp / player.maxMp) * 100}%`;
+            document.getElementById('xp-bar').style.width = `${(player.xp / player.maxXp) * 100}%`;
+            document.getElementById('hp-text').innerText = `${Math.ceil(player.hp)}/${player.maxHp}`;
+            document.getElementById('player-level').innerText = `Lv.${player.level}`;
+            document.getElementById('gold-display').innerText = player.gold;
+            document.getElementById('skill-points-display').innerText = player.skillPoints;
+            document.getElementById('hp-potion-count').innerText = `x ${player.hpPotions}`;
+            document.getElementById('mp-potion-count').innerText = `x ${player.mpPotions}`;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            // Player Movement Logic
+            const moveSpeed = player.speed * delta;
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.mesh.quaternion);
+            const side = new THREE.Vector3(1, 0, 0).applyQuaternion(player.mesh.quaternion);
+
+            if (keys['KeyW'] || keys['ArrowUp']) player.mesh.position.addScaledVector(forward, moveSpeed);
+            if (keys['KeyS'] || keys['ArrowDown']) player.mesh.position.addScaledVector(forward, -moveSpeed);
+            if (keys['KeyA'] || keys['ArrowLeft']) player.mesh.position.addScaledVector(side, -moveSpeed);
+            if (keys['KeyD'] || keys['ArrowRight']) player.mesh.position.addScaledVector(side, moveSpeed);
+
+            // Gravity & Jump Physics
+            if (!player.isGrounded) {
+                player.velocity.y -= 25 * delta;
+                player.mesh.position.y += player.velocity.y * delta;
+                if (player.mesh.position.y <= 0) {
+                    player.mesh.position.y = 0;
+                    player.isGrounded = true;
+                    player.velocity.y = 0;
+                }
+            }
+
+            // Mana Natural Regen
+            if (player.mp < player.maxMp) {
+                player.mp = Math.min(player.maxMp, player.mp + player.manaRegen * delta);
+                updateHUD();
+            }
+
+            // Update Camera Position
+            if (cameraMode === '3rd') {
+                const camOffset = new THREE.Vector3(0, 4, 8).applyQuaternion(player.mesh.quaternion);
+                camera.position.copy(player.mesh.position).add(camOffset);
+                camera.lookAt(player.mesh.position.clone().add(new THREE.Vector3(0, 1.8, 0)));
+            } else { // 1st Person
+                camera.position.copy(player.mesh.position).add(new THREE.Vector3(0, 2.4, 0));
+                const lookTarget = camera.position.clone().add(new THREE.Vector3(0, 0, -5).applyQuaternion(player.mesh.quaternion));
+                camera.lookAt(lookTarget);
+            }
+
+            // Update Spell Projectiles
+            for (let i = spellProjectiles.length - 1; i >= 0; i--) {
+                const p = spellProjectiles[i];
+                p.mesh.position.addScaledVector(p.dir, p.speed * delta);
+                p.life -= delta;
+
+                // Collision with Woodcutters
+                woodcutters.forEach(w => {
+                    if (p.mesh.position.distanceTo(w.mesh.position.clone().add(new THREE.Vector3(0, 1, 0))) < 1.5) {
+                        w.hp -= p.damage;
+                        showDamageText(p.damage, w.mesh.position);
+                        p.life = -1; // Destroy spell
+
+                        if (w.hp <= 0) {
+                            transformWoodcutterToTree(w);
+                        }
+                    }
+                });
+
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    spellProjectiles.splice(i, 1);
+                }
+            }
+
+            // Woodcutter AI Logic
+            woodcutters.forEach(w => {
+                const distToPlayer = w.mesh.position.distanceTo(player.mesh.position);
+                
+                // Aggro Towards Wizard Zayapath
+                if (distToPlayer < 30) {
+                    w.mesh.lookAt(player.mesh.position.x, w.mesh.position.y, player.mesh.position.z);
+                    if (distToPlayer > 2.0) {
+                        const dir = new THREE.Vector3().subVectors(player.mesh.position, w.mesh.position).normalize();
+                        w.mesh.position.addScaledVector(dir, w.speed * delta);
+                    } else {
+                        // Attack Player with Chainsaw
+                        if (Date.now() - w.lastAttack > 1200) {
+                            player.hp = Math.max(0, player.hp - w.attackPower);
+                            w.lastAttack = Date.now();
+                            showToast(`⚠️ Took ${w.attackPower} damage from Woodcutter Chainsaw!`);
+                            updateHUD();
+
+                            if (player.hp <= 0) {
+                                gameOver();
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Weather Particles animation
+            const pSys = scene.getObjectByName("weatherParticles");
+            if (pSys) {
+                const positions = pSys.geometry.attributes.position.array;
+                for (let i = 1; i < positions.length; i += 3) {
+                    positions[i] -= 12 * delta;
+                    if (positions[i] < 0) positions[i] = 40;
+                }
+                pSys.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Render 3D Scene & Minimap
+            renderer.render(scene, camera);
+            renderMinimap();
+        }
+
+        function setupMinimap() {
+            minimapCanvas = document.getElementById('minimap');
+            minimapCtx = minimapCanvas.getContext('2d');
+        }
+
+        function renderMinimap() {
+            if (!minimapCtx) return;
+            minimapCtx.clearRect(0, 0, 140, 140);
+
+            // Center at (70, 70)
+            const cx = 70, cy = 70;
+            const scale = 0.8;
+
+            // Player Marker
+            minimapCtx.fillStyle = '#10b981';
+            minimapCtx.beginPath();
+            minimapCtx.arc(cx, cy, 5, 0, Math.PI * 2);
+            minimapCtx.fill();
+
+            // Enemies Markers
+            woodcutters.forEach(w => {
+                let dx = (w.mesh.position.x - player.mesh.position.x) * scale;
+                let dz = (w.mesh.position.z - player.mesh.position.z) * scale;
+
+                if (Math.hypot(dx, dz) < 65) {
+                    minimapCtx.fillStyle = w.isBoss ? '#ef4444' : '#f59e0b';
+                    minimapCtx.beginPath();
+                    minimapCtx.arc(cx + dx, cy + dz, w.isBoss ? 6 : 3.5, 0, Math.PI * 2);
+                    minimapCtx.fill();
+                }
+            });
+        }
+
+        function toggleCameraMode() {
+            cameraMode = cameraMode === '3rd' ? '1st' : '3rd';
+            document.getElementById('cam-mode-text').innerText = cameraMode === '3rd' ? '3rd Person' : '1st Person';
+            showToast(`Switched to ${cameraMode === '3rd' ? '3rd Person' : '1st Person'} View`);
+        }
+
+        function toggleModal(id) {
+            const modal = document.getElementById(id);
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function upgradeSkill(skillNum) {
+            if (player.skillPoints <= 0) {
+                showToast("No skill points available!");
+                return;
+            }
+
+            player.skillPoints--;
+            if (skillNum === 1) {
+                player.beamDamage += 15;
+                document.getElementById('skill-lvl-1').innerText = "Upgraded";
+                showToast("Magic Beam Damage Increased!");
+            } else if (skillNum === 2) {
+                player.manaRegen += 5;
+                player.maxMp += 25;
+                document.getElementById('skill-lvl-2').innerText = "Upgraded";
+                showToast("Mana Regen Speed & Max MP Increased!");
+            }
+            updateHUD();
+        }
+
+        function useItem(type) {
+            if (type === 'hp') {
+                if (player.hpPotions > 0) {
+                    player.hpPotions--;
+                    player.hp = Math.min(player.maxHp, player.hp + 50);
+                    showToast("Healed +50 HP!");
+                } else showToast("No HP Potions remaining!");
+            } else if (type === 'mp') {
+                if (player.mpPotions > 0) {
+                    player.mpPotions--;
+                    player.mp = Math.min(player.maxMp, player.mp + 50);
+                    showToast("Restored +50 MP!");
+                } else showToast("No Mana Potions remaining!");
+            }
+            updateHUD();
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast-message');
+            toast.innerText = msg;
+            toast.style.opacity = '1';
+            setTimeout(() => {
+                toast.style.opacity = '0';
+            }, 2500);
+        }
+
+        function showDamageText(amt, vec3) {
+            const el = document.createElement('div');
+            el.className = 'damage-text text-amber-400 text-lg';
+            el.innerText = `-${amt}`;
+            el.style.left = `${window.innerWidth / 2 + (Math.random() - 0.5) * 40}px`;
+            el.style.top = `${window.innerHeight / 2 - 20}px`;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 1000);
+        }
+
+        function showVictory() {
+            document.getElementById('modal-end').classList.remove('hidden');
+        }
+
+        function gameOver() {
+            document.getElementById('end-title').innerText = "DEFEATED BY GREED";
+            document.getElementById('end-subtitle').innerText = "Wizard Zayapath was overwhelmed by woodcutters. Nature needs your protection!";
+            document.getElementById('modal-end').classList.remove('hidden');
+        }
+
+        function restartGame() {
+            location.reload();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
